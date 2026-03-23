@@ -1,0 +1,33 @@
+{
+  "version": "v3",
+  "features": [
+    "hour_sin",
+    "hour_cos",
+    "hour_deviation",
+    "is_weekend",
+    "is_offhours",
+    "new_device",
+    "country_change",
+    "impossible_travel",
+    "failed_norm",
+    "resource_sensitivity",
+    "privilege_gap",
+    "login_velocity",
+    "multi_attack_flag",
+    "hour_x_newdev",
+    "fail_x_newdev"
+  ],
+  "n_features": 15,
+  "scaler_type": "RobustScaler",
+  "w_xgb": 0.6,
+  "w_rf": 0.2,
+  "w_iso": 0.2,
+  "threshold_f1": 0.71,
+  "threshold_recall": 0.61,
+  "iso_ref_min": -0.15793008511904982,
+  "iso_ref_max": 0.19385486758870735,
+  "test_f1": 0.9841,
+  "test_recall": 0.994,
+  "test_precision": 0.9744,
+  "test_auc": 0.9993
+}

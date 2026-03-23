@@ -1,0 +1,163 @@
+# ==========================================
+# ENVIRONMENT & CREDENTIALS (SENSITIVE)
+# ==========================================
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.*.local
+*.pem
+*.key
+*.crt
+
+# Firebase & Database
+firebase_service_account.json
+service_account.json
+config/firebase_service_account.json
+backend/config/firebase_service_account.json
+*-service-account.json
+*-credentials.json
+firebase.json
+.firebaserc
+firestore.indexes.json
+.firebaseemulator
+
+# API Keys, Secrets & Auth Tokens
+.apikey
+.apikeys
+*.secret
+secrets.json
+credentials.json
+config/secrets/
+.credentials
+auth_token
+
+# ==========================================
+# BUILD ARTIFACTS
+# ==========================================
+# Frontend
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/out/
+frontend/.vite/
+frontend/coverage/
+
+# Backend
+backend/dist/
+backend/build/
+backend/__pycache__/
+backend/.pytest_cache/
+
+# ==========================================
+# DEPENDENCIES
+# ==========================================
+# Node
+node_modules/
+package-lock.json
+yarn.lock
+bun.lockb
+npm-shrinkwrap.json
+
+# Python
+venv/
+ENV/
+env/
+.venv
+venv/
+.Python
+*.egg-info/
+*.egg
+.installed.cfg
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ==========================================
+# IDE & EDITOR
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-workspace
+*.sublime-project
+
+# ==========================================
+# LOGS
+# ==========================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+python*.log
+*.xlsm
+
+# ==========================================
+# PYTHON ARTIFACTS
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.pickle
+*.pkl
+*.gpickle
+
+# ==========================================
+# DATA FILES
+# ==========================================
+data/raw/
+data/processed/
+data/models/*.pkl
+data/models/*.json
+*.csv
+*.xlsx
+
+# ==========================================
+# OS & SYSTEM
+# ==========================================
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.env.local.php
+
+# ==========================================
+# LOCAL DEVELOPMENT
+# ==========================================
+.cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+*.egg-info/
+dist/
+build/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Vercel
+.vercel/
+.vercel
+
+# Local Netlify folder
+.netlify

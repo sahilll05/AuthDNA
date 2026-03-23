@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // BLOCK all direct client access
+    // Only your backend (with service account) can read/write
+    // This is critical for multi-tenant security
+    
+    match /{document=**} {
+      // No client-side access allowed
+      // Your Python backend uses Admin SDK which BYPASSES these rules
+      allow read, write: if false;
+    }
+  }
+}
