@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLogs } from '@/hooks/use-dashboard';
+import ReactMarkdown from 'react-markdown';
+
 
 const DECISION_BADGE: Record<string, string> = {
   ALLOW: 'bg-emerald-100 text-emerald-800 border-emerald-300',
@@ -85,8 +87,10 @@ export default function LogsPage() {
                           {log.decision}
                         </Badge>
                       </td>
-                      <td className="py-3 px-2 text-xs text-muted-foreground max-w-[200px] truncate">
-                        {log.explanation}
+                      <td className="py-3 px-2 text-xs text-muted-foreground max-w-[200px] truncate overflow-hidden" title={log.explanation}>
+                        <div className="prose prose-invert prose-[10px] max-w-none pointer-events-none line-clamp-1">
+                          <ReactMarkdown>{log.explanation?.replace(/```markdown|```/g, '')}</ReactMarkdown>
+                        </div>
                       </td>
                     </tr>
                   ))}

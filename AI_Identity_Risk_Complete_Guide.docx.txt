@@ -1,0 +1,384 @@
+
+AI-DRIVEN IDENTITY RISK SCORING
+Adaptive Access Control with Behavioral DNA Fingerprinting
+
+Complete Development Guide — MVP Edition
+Version 1.0  |  Hackathon Build  |  1–2 Week Sprint
+
+
+
+1. Core Idea
+Modern enterprise security systems are built on a flawed assumption: that a correct password proves identity. They evaluate each login in isolation against static rules — if the country matches, allow; if the IP is blacklisted, deny. This approach is deterministic, context-blind, and incapable of adapting to evolving threats.
+
+This project reframes the entire access control question:
+
+OLD: "Does this person know the correct password?"    NEW: "Is this person behaviorally consistent with their established identity?"
+
+The system builds a Behavioral DNA Fingerprint for every user — encoding their login rhythms, device loyalty, location consistency, resource habits, and privilege patterns into a mathematical vector. Every new login is scored against this fingerprint in real time. A correct password gets you to the door. Your Behavioral DNA decides if you actually get in.
+
+1.1 The Problem Being Solved
+
+1.2 The Value Proposition
+Zero friction for 92% of legitimate logins — employees never notice the monitoring
+Catches credential theft even when attacker is in the right country with the right password
+Detects insider threats through gradual behavioural drift — not just single-event rules
+Role-aware risk calibration — same score means different things for an intern vs a superadmin
+Human-in-the-loop (HITL) design — admin can override, and every override improves the model
+
+
+2. Approach
+The system is built on five sequential processing layers. Each layer answers a different question about the login attempt. Their outputs combine into a single risk score that drives the access decision.
+
+2.1 The Five Processing Layers
+
+2.2 Risk Score Formula
+All layer outputs combine into a single score (0–100) using a weighted formula. The DNA weight is dynamic — it starts at 10% for new users and grows to 40% as their history accumulates:
+
+risk_score = (0.40 × anomaly_norm) + (0.30 × xgb_proba) + ((1 – dna_match) × dna_weight) + (0.20 × graph_penalty)
+dna_weight = 0.10 + (dna_confidence × 0.30)   # scales from 10% → 40%
+
+2.3 Decision Thresholds
+
+2.4 Two-Interface Architecture
+The system is split into two completely separate interfaces, making the monitoring invisible to employees while giving security teams full observability:
+
+Normal login page + work dashboard. All monitoring runs silently in the background. The employee never sees scores, flags, or alerts. They only experience MFA/block if risk is elevated. Interface 1 — Employee Portal
+Real-time risk feed, DNA radar charts, LLM explanations, and HITL override controls. Only visible to security team. Every admin decision is stored as labeled training data. Interface 2 — Admin Panel
+
+
+3. Technology Stack
+The stack is chosen for maximum build speed, minimum operational complexity, and strong ML ecosystem support. Every component can run locally with no cloud infrastructure required for the MVP.
+
+3.1 Full Stack Overview
+
+
+4. Why Each Technology — Justification & Usage
+This section explains the specific reason each technology was chosen, what alternatives were considered, and exactly where in the codebase it is used.
+
+4.1 Isolation Forest — Why Not a Neural Network?
+
+WHERE IT IS USED:  backend/models/isolation_forest.pkl — trained once in train_models.py, loaded at FastAPI startup via lifespan(). Called on every login event via iso.decision_function(X_scaled).
+
+4.2 XGBoost — Why Not Random Forest or SVM?
+XGBoost was chosen over Random Forest and SVM for three specific reasons: native SHAP integration via TreeExplainer (critical for the LLM explanation layer), superior performance on imbalanced tabular datasets via scale_pos_weight, and faster inference for real-time scoring.
+
+
+WHERE IT IS USED:  backend/models/xgboost.pkl — trained in train_models.py with sample weights (HITL decisions get 3× weight). Loaded at startup. At inference: xgb.predict_proba(X)[0][2] extracts the high-risk probability. SHAP values computed immediately after via shap.TreeExplainer(xgb).shap_values(X).
+
+4.3 Behavioural DNA Engine — Why Not Another ML Model?
+The DNA engine is intentionally algorithmic rather than ML-based. This is a deliberate design decision. The engine computes rolling statistical summaries (mean, standard deviation, mode, set membership) over user history. This makes it fully deterministic and interpretable — when DNA match is 0.31, you can explain exactly why: location changed (0.0), device unknown (0.3), login hour 4.1 standard deviations from mean (0.1). A neural network doing the same job would be a black box, making it useless for the HITL explainability requirement.
+
+WHERE IT IS USED:  backend/dna_engine.py — build_dna() computes the fingerprint from user history after each safe login. dna_match_score() computes the 6-dimensional match score per login. detect_drift() evaluates drift velocity to protect against slow fingerprint poisoning. State persisted in dna_profiles SQLite table.
+
+4.4 NetworkX — Why Not a Relational DB JOIN?
+The privilege graph could be modelled as a database join query (User JOIN Role JOIN Resource). NetworkX was chosen instead because it enables future path analysis — shortest path, reachability analysis, lateral movement detection. A SQL join only answers "does this user have this role?" NetworkX answers "how many hops would it take for this user to reach that resource?" — the foundation of BloodHound-style attack path analysis.
+
+WHERE IT IS USED:  backend/privilege_graph.py — build_privilege_graph() constructs a directed graph at startup. privilege_gap_score(user_id, resource_id, G) computes the sensitivity gap. Loaded once in FastAPI lifespan() and shared across all requests via app.state.graph.
+
+4.5 FastAPI — Why Not Flask or Django?
+
+WHERE IT IS USED:  backend/main.py — POST /evaluate-login (risk scoring), GET /events (history), POST /hitl/decision (admin override), WebSocket /ws/admin (real-time push to admin panel). Models loaded once at startup via @asynccontextmanager lifespan().
+
+4.6 Claude API (LLM) — Why Not a Template?
+A template-based approach could produce output like "Risk elevated because: impossible travel detected, unknown device." The Claude API produces: "This login was blocked because the user appears to have travelled from Mumbai to London in 90 minutes — physically impossible. Combined with an unrecognized device and an attempt to access the billing panel, a resource this user has never accessed before, this pattern is consistent with credential theft." The difference is interpretive context, causal framing, and plain English that a non-technical manager can act on.
+
+WHERE IT IS USED:  backend/llm_explainer.py — generate_explanation() called after scoring for any event with risk_score > 50. SHAP top-3 features and active flags passed as structured context. Model: claude-sonnet-4-20250514, max_tokens: 200. NOT called for clean ALLOW decisions (score < 30) — saves cost and avoids unnecessary latency.
+
+4.7 React + Recharts — Why Not Vue or plain HTML?
+React was chosen because the admin dashboard requires live state management — WebSocket events constantly updating the risk feed, DNA radar charts re-rendering per event, and HITL buttons triggering API calls and immediate UI state updates. This reactive data flow is React's core strength. Recharts was chosen for its native React integration and the RadarChart component, which is the primary demo visual for the DNA fingerprint comparison.
+
+WHERE IT IS USED:  frontend/src/AdminDashboard.jsx — RadarChart renders 6-dimension DNA comparison. LineChart shows 24-hour risk timeline. frontend/src/EmployeeLogin.jsx — standard controlled form. Both connect to FastAPI via Axios. Admin panel additionally maintains a WebSocket connection to /ws/admin for live event push.
+
+
+5. Data — Preparation, Structure & Flow
+5.1 Data Philosophy
+The system uses synthetic data for the MVP. This is standard practice for security AI prototypes. The critical design principle: you cannot generate pure random login data. Random data has no patterns, so the model has nothing to learn. You must embed realistic behavioural profiles first, then deliberately inject anomalies at known positions.
+
+5.2 The Five Database Tables
+
+5.3 The 10 Engineered Features
+
+5.4 Data Generation Strategy
+Generate 200 sessions per user across 90 days. Use a 92/5/3 split: 92% clean normal sessions, 5% clear anomalies (impossible travel, brute force, compound attacks), 3% edge cases (new device alone, slightly unusual hour). This ratio mirrors real-world attack rates and prevents the model from becoming either over-sensitive or over-permissive.
+
+Six anomaly types to inject:
+Impossible travel — set country to foreign value with same-day prior login
+New device — generate device_id with different hash variant
+Brute force — set failed_attempts to 6–12
+Privilege escalation — target resource above role sensitivity ceiling
+Unusual hour — set hour to 2–4am for a 9–6 employee
+Compound attack — combine impossible travel + new device + high-sensitivity resource (highest risk)
+
+5.5 Full Data Flow Diagram
+The following describes the complete data journey from a login attempt through to the admin dashboard:
+
+
+
+6. UI/UX Design
+The system has two interfaces with completely different design philosophies, reflecting their fundamentally different audiences and purposes.
+
+6.1 Interface 1 — Employee Portal
+Design Philosophy
+Invisible security. The employee should feel they are using a normal company login portal. Nothing about the interface should suggest monitoring is happening. Friction appears only when risk requires it — and even then, it looks like a standard MFA flow, not an accusation.
+
+Key Screens
+Standard email + password form. Company branding. No risk indicators. On submit, POST /evaluate-login fires silently in background. Login Page
+Employee's normal work tools (mocked for MVP). Shown immediately if ALLOW. Company resources, team data appropriate to their role. Work Dashboard
+Clean OTP entry UI. No explanation of why MFA was triggered. Generic message: "Additional verification required for your security." MFA Screen
+Generic access denied page. "Contact your security team." No mention of AI, risk scores, or which signals fired. Attacker learns nothing. Block Screen
+
+Design Rules
+Never show scores, signals, or model outputs to employees
+MFA and block screens use identical wording to standard security policies
+All metadata collection (hour, device fingerprint, browser) happens on form submit — not visible to user
+No cookie banners, permission prompts, or indicators of monitoring
+
+6.2 Interface 2 — Admin Security Panel
+Design Philosophy
+Maximum information density with clear hierarchy. Security analysts need to scan many events quickly, identify the high-risk ones, read the LLM explanation, inspect the DNA radar chart, and make a HITL decision — all within 30 seconds per event.
+
+Priority Panel Order (Build in This Sequence)
+
+HITL Decision UX
+When an event has risk score 50–85 (the uncertain zone), three override buttons appear below the LLM explanation:
+— Override to ALLOW. Stores in hitl_decisions as positive label. Admin can optionally add context note. Approve Access (green)
+— Confirm the MFA decision. Admin agrees with AI. Stored as confirmation. Require MFA (amber)
+— Hard block. Stores as high-risk label. DNA frozen. Incident flag created. Block and Investigate (red)
+
+Events with score < 50 show no override buttons — AI is confident enough. Events with score > 85 show a status indicator only — the hard block stands unless admin explicitly overrides in the audit log.
+
+
+7. Technical Build — MVP Step-by-Step
+Follow this guide in strict sequence. Each phase produces a working deliverable before the next begins. Do not start the frontend until the API returns correct data end-to-end.
+
+Phase 0 — Environment Setup (Day 1 Morning)
+Prerequisites
+Python 3.10 or higher
+Node.js 18 or higher
+Git (for version control)
+Anthropic API key (get from console.anthropic.com)
+
+Project Structure
+ai-identity-risk/
+├── backend/
+│   ├── main.py            # FastAPI app
+│   ├── database.py        # SQLite schema
+│   ├── features.py        # Feature engineering
+│   ├── dna_engine.py      # DNA fingerprint logic
+│   ├── privilege_graph.py # NetworkX graph
+│   ├── llm_explainer.py   # Claude API calls
+│   ├── train_models.py    # One-time training script
+│   ├── retrain.py         # Weekly retrain pipeline
+│   ├── models/            # .pkl files saved here
+│   ├── data/              # SQLite DB + sessions.json
+│   ├── scripts/
+│   │   └── generate_data.py
+│   ├── requirements.txt
+│   └── .env
+└── frontend/
+    └── src/
+        ├── App.jsx
+        ├── EmployeeLogin.jsx
+        └── AdminDashboard.jsx
+
+Install Backend
+cd backend && python -m venv venv && source venv/bin/activate
+pip install fastapi uvicorn sqlalchemy faker scikit-learn xgboost shap \
+    networkx numpy pandas anthropic python-dotenv apscheduler joblib
+
+Install Frontend
+cd frontend && npx create-vite@latest . -- --template react
+npm install && npm install recharts axios
+
+Phase 1 — Data Generation & Database (Day 1–2)
+Step 1: Create the .env file
+# backend/.env
+ANTHROPIC_API_KEY=sk-ant-...
+SECRET_KEY=any_random_string_here
+DATABASE_URL=sqlite:///./data/identity_risk.db
+
+Step 2: Define the database schema (database.py)
+Create five tables as defined in Section 5.2. Run once to initialise:
+python -c "from database import Base, engine; Base.metadata.create_all(engine)"
+
+Step 3: Generate synthetic data
+Run generate_data.py to create 1,000 sessions for 5 users across 90 days with 8% anomaly rate. Verify output:
+python scripts/generate_data.py
+# Expected: Generated 1000 sessions, ~80 anomalies (8.0%)
+
+Phase 2 — Feature Engineering (Day 3)
+Build features.py with the engineer_features() function that takes a raw event dict + user history list and returns a dict of exactly 10 features. Critical implementation notes:
+use math.sin(2 * math.pi * hour / 24) — never use raw hour hour_sin and hour_cos
+use (hour − mean) / (std + 0.1) — add 0.1 to prevent division by zero for new users hour_zscore
+check country_change AND days_since_last < 1 — both must be true impossible_travel
+must return float or int — no None values. Use defaults for new users. All features
+
+Phase 3 — Train ML Models (Day 4)
+Run train_models.py to produce three files in backend/models/:
+python train_models.py
+# Expected output:
+# Training samples: 1000
+# Isolation Forest: contamination=0.08, 100 estimators
+# XGBoost: accuracy on test set: 0.91
+# Saved: isolation_forest.pkl, xgboost.pkl, scaler.pkl
+
+CRITICAL:  Always use the same scaler instance for both training and inference. Never fit a new scaler on inference data. Load scaler.pkl at FastAPI startup and use it for every prediction.
+
+Phase 4 — DNA Engine (Day 5)
+Implement dna_engine.py with three functions:
+— computes avg_hour, hour_std, home_country, primary_device, typical_resources, confidence from session history build_dna(sessions)
+— returns weighted average of 4 dimension scores (0.0 to 1.0) dna_match_score(dna, live_event)
+— returns NATURAL / MONITORED / SUSPICIOUS / FREEZE based on number of changed dimensions detect_drift(old_dna, new_dna)
+
+Test the DNA engine manually before wiring it into the API:
+python -c "from dna_engine import *; import json
+sessions = json.load(open('data/sessions.json'))
+alice = [s for s in sessions if s['user_id']=='alice_eng']
+dna = build_dna(alice[:50])
+print(dna)  # should show avg_hour ~10, confidence ~1.0"
+
+Phase 5 — FastAPI Backend (Day 6–7)
+Wire all components together in main.py. The critical pattern: load all models once at startup using the lifespan context manager. Never load models inside a request handler.
+from contextlib import asynccontextmanager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.iso     = joblib.load("models/isolation_forest.pkl")
+    app.state.xgb     = joblib.load("models/xgboost.pkl")
+    app.state.scaler  = joblib.load("models/scaler.pkl")
+    app.state.explainer = shap.TreeExplainer(app.state.xgb)
+    app.state.graph   = build_privilege_graph()
+    yield  # app serves requests here
+
+Implement three endpoints:
+— main scoring endpoint, returns risk_score, decision, explanation, dna_match, shap_factors, drift_status POST /evaluate-login
+— maintains persistent connection list, pushes new events to all connected admin clients WebSocket /ws/admin
+— stores admin override in hitl_decisions table POST /hitl/decision
+
+Test the API before touching the frontend:
+uvicorn main:app --reload --port 8000
+# Open http://localhost:8000/docs
+# Test POST /evaluate-login with sample payload
+
+Phase 6 — LLM Explanation Layer (Day 7)
+Implement llm_explainer.py. The prompt must include: risk score, decision, top 3 SHAP features with their impact values, DNA match percentage, and list of active flags. Instruct the model to write 2–3 sentences for a non-technical manager. Set max_tokens to 200.
+
+COST OPTIMISATION:  Only call the LLM when risk_score > 50. For clean ALLOW decisions (score < 30), return None. This reduces API calls by ~85% and eliminates unnecessary latency for legitimate users.
+
+Phase 7 — React Frontend (Day 8–9)
+Build the two interfaces in this order:
+— Standard login form, POST to /evaluate-login on submit, show MFA or block message based on decision field in response. Employee never sees the score. EmployeeLogin.jsx
+— WebSocket connection established on mount. For each incoming event: render event card with user, score badge, LLM explanation text, RadarChart for DNA dimensions, HITL buttons for uncertain scores (50–85). AdminDashboard.jsx
+
+RadarChart data structure for DNA comparison:
+const radarData = [
+  { dim: "Hour",      stored: dna.temporal_score * 100, live: live.temporal * 100 },
+  { dim: "Location",  stored: dna.location_score * 100, live: live.location * 100 },
+  { dim: "Device",    stored: dna.device_score * 100,   live: live.device * 100 },
+  { dim: "Resource",  stored: dna.resource_score * 100, live: live.resource * 100 },
+  { dim: "Frequency", stored: dna.freq_score * 100,     live: live.freq * 100 },
+  { dim: "Privilege", stored: dna.priv_score * 100,     live: live.priv * 100 },
+];
+
+Phase 8 — Adaptive Retraining (Day 10)
+Implement retrain.py with the full pipeline: load base synthetic data (weight 1.0), load recent real events from DB (weight 2.0), load unreviewed HITL decisions (weight 3.0), rebuild feature matrix, train new models, compare accuracy to existing model, replace only if new model is not significantly worse.
+
+Wire the scheduler in FastAPI lifespan():
+from apscheduler.schedulers.background import BackgroundScheduler
+scheduler = BackgroundScheduler()
+scheduler.add_job(check_and_retrain, "interval", hours=1)
+scheduler.add_job(run_retrain_pipeline, "cron", day_of_week="sun", hour=2)
+scheduler.start()
+
+Phase 9 — Integration Testing (Day 11)
+Run these four test scenarios manually before demo rehearsal:
+— Same user, same device, same country, usual hour. Verify: ALLOW, no LLM call, seamless dashboard load. Clean login (score < 30)
+— Same user, same country, new device fingerprint. Verify: MFA triggered, LLM explanation mentions device. New device login (score 40–60)
+— Same user, foreign country, same-day prior login. Verify: BLOCK, DNA frozen, admin panel alert fires. Impossible travel (score > 80)
+— Trigger a STEP_UP event, override in admin panel to ALLOW, verify hitl_decisions table updated and model will use this label on next retrain. HITL override
+
+Phase 10 — Demo Rehearsal (Day 12)
+The 60-second winning demo sequence:
+— Score 12, green ALLOW badge, DNA radar shows perfect match. Show normal login for alice_eng
+— Score 88, red BLOCK badge, radar shows dramatic six-dimension mismatch. Show same user from foreign country 1 hour later
+— Points to impossible travel, unknown device, billing panel access. Read the LLM explanation aloud
+— DNA frozen, admin alerted. Show drift status: SUSPICIOUS
+— Admin reviews an uncertain event (score 65), clicks Approve, explain how this label feeds the next retrain. Demonstrate HITL
+
+KEY LINE:  "A correct password gets you to the door. Your Behavioral DNA decides if you actually get in."
+
+
+8. Use Case Scenarios — Small to Critical Attacks
+The following scenarios demonstrate the system's behaviour across the full threat spectrum, from minor anomalies to nation-state attacks. In every case, the legitimate user is unaware of the monitoring process.
+
+8.1 Low-Severity Scenarios
+
+8.2 Medium-Severity Scenarios
+
+8.3 High-Severity Scenarios
+
+8.4 Critical / APT Scenarios
+
+
+9. The Pitch
+9.1 The One-Line Pitch
+"A correct password gets you to the door. Your Behavioral DNA decides if you actually get in."
+
+9.2 The Problem (30 Seconds)
+Every enterprise today has the same broken security model: a list of rules written two years ago, evaluated against each login in isolation, with no memory of who the user actually is. An attacker who steals your password and happens to be in the right country will sail through every rule unchanged. Static IAM systems create two failure modes simultaneously — they block legitimate users too often and let attackers through too easily. This is not a minor inefficiency. The average cost of a data breach is $4.9 million, and 80% begin with compromised credentials.
+
+9.3 The Solution (60 Seconds)
+We built a system that learns who you are — not just what password you know. For every user in the enterprise, we build a Behavioral DNA Fingerprint: a mathematical vector encoding their login rhythm, device loyalty, location consistency, resource habits, and privilege patterns. Every login attempt is scored against this fingerprint in real time.
+
+The scoring engine combines five layers: an Isolation Forest for anomaly detection, XGBoost for risk classification, our proprietary DNA matching algorithm, a privilege graph for role-aware access scoring, and a Claude-powered LLM that generates plain English explanations for the security team. All of this happens in under 20 milliseconds, completely invisible to the legitimate user.
+
+When someone tries to use a stolen credential, they cannot fake the behavioral fingerprint built over years of legitimate use. Even a sophisticated nation-state actor studying their target for months cannot perfectly replicate the micro-temporal patterns encoded in two years of DNA history. The system caught the APT by a 58% identity mismatch — a signal invisible to human analysts.
+
+9.4 The Demo (60 Seconds)
+
+9.5 Differentiation
+Three things make this system genuinely different from every other student project and most commercial tools:
+
+— Per-user identity verification that distinguishes natural life changes from account takeover by measuring how many behavioral dimensions change simultaneously. Natural drift affects one dimension over weeks. An attacker is a different person — all dimensions change at once. Behavioral DNA Fingerprinting with Drift Velocity Detection
+— The same risk score means different things for different roles. A score of 55 triggers MFA for an intern, step-up auth for a finance officer, and a hard block for an IT admin targeting the IAM console. The privilege graph ensures the response is proportional to the consequence of being wrong. Role-Aware Risk Calibration
+— HITL decisions are not just access controls — every admin override becomes a gold-labeled training example with 3× weight in the next retrain cycle. The system gets more accurate over time specifically because of the cases where it was uncertain. Human-in-the-Loop as a Training Loop
+
+9.6 Market & Future
+The global Identity and Access Management market is valued at $17B in 2024, growing at 14% CAGR. Behavioral biometrics and continuous authentication are the fastest-growing segment. Every enterprise that handles sensitive data — financial services, healthcare, government, technology — is a potential customer. The MVP targets the 500–5,000 employee enterprise segment where sophisticated attacks are frequent but dedicated security AI is out of reach.
+
+The roadmap beyond the MVP:
+— Compare user behaviour to their role peer group, not just their own history Peer group deviation analysis
+— Replace Isolation Forest with a sequence model for temporal pattern detection LSTM sequence modeling
+— Build behavioural fingerprints without centralising raw session data Federated DNA
+— Incorporate IP reputation feeds and known attacker infrastructure Real-time threat intelligence integration
+— REST API that any IAM vendor can integrate in a single sprint API-first commercial offering
+
+9.7 Technical Credibility Points
+These facts demonstrate the system is production-aware, not just a prototype:
+Models retrain weekly using HITL gold labels, not just synthetic data
+DNA confidence scoring — new users get lenient matching, established users get strict matching
+Drift velocity detection distinguishes natural life changes from account compromise
+LLM explanation layer uses SHAP values as grounding — not free-form generation from risk scores
+FastAPI lifespan pattern ensures zero-latency model loading — not per-request loading
+WebSocket push — admin panel updates in real time, not on page refresh
+Scale_pos_weight in XGBoost handles class imbalance without SMOTE
+
+
+10. Known Limitations & MVP Scope Cuts
+Building a convincing demo that tells a clear story is more valuable than a feature-complete system that cannot be explained in a demo. The following cuts are intentional:
+
+
+10.1 Honest Limitations to Acknowledge
+— Labels are assigned by the same rules the system learns. In production, HITL decisions and historical incident data replace this. Synthetic data labels are circular
+— New users get ML-only scoring for the first 10 sessions. False positive rate is higher during this window. DNA cold start problem
+— They are generated text, not legally defensible audit records. Separate audit logging is required for compliance. LLM explanations are not auditable
+— In production, this should integrate with the enterprise's existing IAM directory (LDAP/Active Directory). The privilege graph is manually configured
+
+
+11. Key References & Study Materials
+Read these before writing code, in this order:
+
+
+
+
+AI-Driven Identity Risk Scoring — Complete Development Guide v1.0
+Prepared for hackathon build · 1–2 week sprint · MVP edition

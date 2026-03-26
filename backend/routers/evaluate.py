@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Depends
 from middleware.api_key_auth import verify_api_key
 from middleware.rate_limiter import check_rate_limit
+from pydantic import BaseModel
 from models.schemas import EvaluateRequest, EvaluateResponse
 from engines.feature_pipeline import FeaturePipeline
 from engines.dna_engine import DNAEngine
@@ -39,19 +40,25 @@ async def evaluate_login(body: EvaluateRequest, request: Request, tenant: dict =
     tid = tenant["tenant_id"]
     dna_profile = await dna_eng.get_profile(tid, body.user_id)
     pipe = await fp.extract(body.user_id, ip, dfp, body.resource, body.failed_attempts, ua, body.timestamp, dna_profile, body.role or "viewer")
-    ml_scores = ml_engine.predict(pipe["features"])
+    ml_scores = ml_engine.score(pipe["features"])
     dna_features = {
         "new_device": int(pipe["flags"]["new_device"]),
         "country_change": int(pipe["flags"]["country_change"]),
         "impossible_travel": int(pipe["flags"]["impossible_travel"]),
-        "hour_deviation": pipe["feature_dict"]["hour_deviation"],
+        "hour_deviation": pipe["feature_dict"].get("hour_zscore", 0),
         "failed_attempts": body.failed_attempts
     }
     dna_meta = {"ip_change": ip != dna_profile.get("last_login_ip") if dna_profile else True}
     dna_result = DNAEngine.compute_match_score(dna_profile, dna_features, dna_meta)
     ur = json.loads(dna_profile.get("common_resources_json", "[]")) if dna_profile else []
     gr = graph_eng.evaluate(body.role or "viewer", body.resource, ur)
-    risk = risk_eng.evaluate(ml_scores, dna_result["dna_match"], gr["graph_score"], pipe["flags"], body.failed_attempts, pipe["feature_dict"])
+    login_count = int(dna_profile.get("login_count", 0)) if dna_profile else 0
+    days_active = int(dna_profile.get("days_active", 0)) if dna_profile else 0
+    
+    # HITL Trust Check
+    hitl_trusted = await db_service.get_recent_hitl_trust(tid, body.user_id)
+    
+    risk = risk_eng.evaluate(ml_scores, dna_result["dna_match"], gr["graph_score"], pipe["flags"], body.failed_attempts, pipe["feature_dict"], login_count, days_active, body.role or "viewer", hitl_trusted=hitl_trusted)
     explanation = await llm_exp.explain(risk["score"], risk["decision"], risk["risk_factors"], pipe["geo"]["country"], pipe["geo"]["city"], pipe["parsed_hour"], dna_result["dna_match"], dna_result["is_new_user"])
     pms = round((time.time() - start) * 1000, 1)  # pyre-ignore[6]
     now = _ts()
@@ -61,6 +68,39 @@ async def evaluate_login(body: EvaluateRequest, request: Request, tenant: dict =
         ip=ip, country=pipe["geo"]["country"], city=pipe["geo"]["city"])
     asyncio.create_task(_se(tid, body, ip, dfp, pipe, risk, explanation, dna_result, pms, rid, now, tenant))
     return resp
+
+class HITLRequest(BaseModel):
+    request_id: str
+    decision: str
+
+@router.post("/evaluate/hitl")
+async def handle_hitl(body: HITLRequest, tenant: dict = Depends(verify_api_key)):
+
+    try:
+        # Lookup the user_id from the original request log to make the trust persistent per user
+        tid = tenant["tenant_id"]
+        logs = await db_service.get_login_logs(tid, limit=100) # Simple scan
+        user_id = "unknown"
+        for log in logs:
+            if log.get("request_id") == body.request_id:
+                user_id = log["user_id"]
+                break
+        
+        # Map frontend REQUIRE_MFA to backend STEPUP
+        decision = body.decision
+        if decision == "REQUIRE_MFA":
+            decision = "STEPUP"
+            
+        await db_service.save_hitl_decision(tid, body.request_id, user_id, decision)
+        # Update original log so it reflects the new status in history
+        await db_service.update_login_log_decision(tid, body.request_id, decision)
+        
+        return {"status": "success", "message": f"Recorded HITL decision {decision} for {user_id}", "effective_decision": decision}
+
+    except Exception as e:
+        from fastapi import HTTPException
+        logger.error(f"Failed to save HITL decision: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 async def _se(tid, body, ip, dfp, pipe, risk, explanation, dna_result, pms, rid, now, tenant):
@@ -72,7 +112,7 @@ async def _se(tid, body, ip, dfp, pipe, risk, explanation, dna_result, pms, rid,
             "is_new_user": dna_result["is_new_user"], "processing_time_ms": pms, "request_id": rid[:50], "timestamp": now}
         await db_service.save_login_log(tid, log_data)
         # Broadcast to SSE clients
-        push_event(tid, {"type": "login_event", "tenant_id": tid, **{k: v for k, v in log_data.items() if k != "risk_factors_json"}})
+        push_event(tid, {"type": "login_event", "tenant_id": tid, "risk_factors": risk["risk_factors"], **{k: v for k, v in log_data.items() if k != "risk_factors_json"}})
         if risk["decision"] != "BLOCK":
             await DNAEngine.update_profile(
                 tid, body.user_id,

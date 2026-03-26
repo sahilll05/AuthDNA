@@ -46,9 +46,6 @@ async def _event_generator(request: Request, tenant_id: str):
         yield f"data: {json.dumps({'type': 'connected', 'tenant_id': tenant_id})}\n\n"
 
         while True:
-            # Check if client disconnected
-            if await request.is_disconnected():
-                break
             try:
                 event = await asyncio.wait_for(q.get(), timeout=15.0)
                 yield f"data: {json.dumps(event)}\n\n"

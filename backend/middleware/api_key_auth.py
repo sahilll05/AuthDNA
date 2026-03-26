@@ -10,10 +10,15 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 async def verify_api_key(request: Request, api_key: str = Depends(api_key_header)):
+    # Fallback to query parameter if header is missing (useful for SSE/WebSockets)
     if not api_key:
-        logger.error("❌ Missing X-API-Key header in request")
+        api_key = request.query_params.get("api_key")
+
+    if not api_key:
+        logger.error("❌ Missing X-API-Key header or query parameter in request")
         logger.error(f"   Headers received: {dict(request.headers)}")
-        raise HTTPException(401, "Missing X-API-Key header")
+        raise HTTPException(401, "Missing API key")
+
 
     logger.info(f"🔐 Verifying API key: {api_key[:20]}... (len={len(api_key)})")
     key_hash = hashlib.sha256(api_key.encode()).hexdigest()

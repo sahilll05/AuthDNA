@@ -15,6 +15,7 @@ import {
 
 const navItems = [
   { path: "/app/dashboard", icon: "📊", label: "Dashboard" },
+  { path: "/app/live-radar", icon: "📡", label: "Live Radar" },
   { path: "/app/threats", icon: "⚠️", label: "Threats" },
   { path: "/app/logs", icon: "📋", label: "Logs" },
   { path: "/app/users", icon: "👤", label: "Users" },
@@ -66,7 +67,8 @@ export default function AppLayout() {
                 }
 
                 const navItem = item as { path: string; icon: string; label: string };
-                const isActive = location.pathname === navItem.path;
+                const isActive = location.pathname.startsWith((navItem as any).path) && 
+                                 ((navItem as any).path !== "/app" || location.pathname === "/app");
 
                 const linkContent = (
                   <NavLink

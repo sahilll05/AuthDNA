@@ -12,9 +12,18 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from routers.evaluate import ml_engine
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from retrain import check_and_retrain
+
     ml_engine.load_models()
-    logger.info("🚀 AuthDNA started")
+    
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(check_and_retrain, "interval", hours=24)
+    scheduler.start()
+    
+    logger.info("🚀 AuthDNA started with Adaptive Retraining Scheduler")
     yield
+    scheduler.shutdown()
 
 app = FastAPI(title="AuthDNA API", version="2.0.0", lifespan=lifespan)
 # Allow all origins so any client website (like Payflow) can send telemetry

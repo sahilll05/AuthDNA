@@ -1,6 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useLogs } from '@/hooks/use-dashboard';
+import ReactMarkdown from 'react-markdown';
+
 
 const DECISION_BADGE: Record<string, string> = {
   OTP: 'bg-amber-500 text-white',
@@ -56,9 +58,9 @@ export default function ThreatsPage() {
                     </div>
                   </div>
                   {t.explanation && (
-                    <p className="mt-3 text-sm italic text-muted-foreground bg-muted/50 rounded p-2">
-                      {t.explanation}
-                    </p>
+                    <div className="mt-3 text-sm italic text-muted-foreground bg-muted/50 rounded p-2 prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown>{t.explanation?.replace(/```markdown|```/g, '')}</ReactMarkdown>
+                    </div>
                   )}
                 </CardContent>
               </Card>

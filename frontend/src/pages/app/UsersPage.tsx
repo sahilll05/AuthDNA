@@ -14,8 +14,7 @@ const DECISION_BADGE: Record<string, string> = {
 };
 
 export default function UsersPage() {
-  const { apiKey } = useAuth();
-  const { events, connected, error } = useRealtimeLogs({ apiKey });
+  const { events, connected, error, stats } = useRealtimeLogs();
   const [filterUser, setFilterUser] = useState('');
 
   const filteredEvents = useMemo(() => {
@@ -23,15 +22,6 @@ export default function UsersPage() {
     return events.filter(e => e.user_id.toLowerCase().includes(filterUser.toLowerCase()));
   }, [events, filterUser]);
 
-  const stats = useMemo(() => {
-    return events.reduce((acc, e) => {
-      acc.total++;
-      if (e.decision === 'BLOCK') acc.blocked++;
-      if (e.decision === 'OTP' || e.decision === 'STEPUP') acc.challenged++;
-      if (e.decision === 'ALLOW') acc.allowed++;
-      return acc;
-    }, { total: 0, blocked: 0, challenged: 0, allowed: 0 });
-  }, [events]);
 
   return (
     <div className="space-y-6 flex flex-col h-[calc(100vh-theme(spacing.16))] relative">

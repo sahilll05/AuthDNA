@@ -105,6 +105,22 @@ class DatabaseService:
         db = get_databases()
         return await asyncio.to_thread(db.create_document, DB_ID, "login_logs", ID.unique(), data)
 
+    async def update_login_log_decision(self, tenant_id: str, request_id: str, decision: str):
+        try:
+            db = get_databases()
+            # Find the document ID first
+            q = [Query.equal("tenant_id", tenant_id), Query.equal("request_id", request_id), Query.limit(1)]
+            r = await asyncio.to_thread(db.list_documents, DB_ID, "login_logs", q)
+            docs = r.get("documents", [])
+            if docs:
+                did = docs[0]["$id"]
+                await asyncio.to_thread(db.update_document, DB_ID, "login_logs", did, {"decision": decision})
+                return True
+            return False
+        except AppwriteException as e:
+            logger.error(f"Failed to update log decision: {e}")
+            return False
+
     async def get_login_logs(self, tenant_id: str, limit=50, user_id=None):
         q = [Query.equal("tenant_id", tenant_id), Query.order_desc("timestamp"), Query.limit(limit)]
         if user_id:
@@ -115,6 +131,39 @@ class DatabaseService:
             return r.get("documents", [])
         except AppwriteException:
             return []
+
+
+    # === HITL DECISIONS ===
+
+    async def save_hitl_decision(self, tenant_id: str, request_id: str, user_id: str, decision: str):
+        data = {
+            "tenant_id": tenant_id,
+            "request_id": request_id,
+            "user_id": user_id,
+            "decision": decision,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        db = get_databases()
+        return await asyncio.to_thread(db.create_document, DB_ID, "hitl_decisions", ID.unique(), data)
+
+    async def get_recent_hitl_trust(self, tenant_id: str, user_id: str) -> bool:
+        """Check if an admin has recently (last 1h) approved this user via HITL."""
+        from datetime import timedelta
+        # Simple implementation: check if any 'ALLOW' decision exists for this user in last hour
+        since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        q = [
+            Query.equal("tenant_id", tenant_id),
+            Query.equal("user_id", user_id),
+            Query.equal("decision", "ALLOW"),
+            Query.greater_than("timestamp", since),
+            Query.limit(1)
+        ]
+        try:
+            db = get_databases()
+            r = await asyncio.to_thread(db.list_documents, DB_ID, "hitl_decisions", q)
+            return len(r.get("documents", [])) > 0
+        except AppwriteException:
+            return False
 
     # === DNA PROFILES ===
     async def get_dna_profile(self, tenant_id: str, user_id: str):

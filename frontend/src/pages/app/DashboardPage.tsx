@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { getStats } from '@/api/dashboard';
 import { useAuth } from '@/context/AuthContext';
+import ReactMarkdown from 'react-markdown';
+
 
 interface Stats {
   total_logins: number;
@@ -58,29 +60,29 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-0 shadow-md bg-gradient-to-br from-teal-50 to-white dark:from-teal-950/30 dark:to-zinc-900">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="border border-white/5 shadow-xl bg-card/40 backdrop-blur-xl bg-gradient-to-br from-teal-500/10 to-transparent hover:bg-teal-500/20 transition-all duration-500 hover:-translate-y-1 hover:shadow-teal-500/20">
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total Evaluations</p>
-            <p className="text-3xl font-bold text-teal-700 dark:text-teal-400">{stats.total_logins.toLocaleString()}</p>
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Evaluations</p>
+            <p className="text-4xl font-black mt-2 text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-600">{stats.total_logins.toLocaleString()}</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-md bg-gradient-to-br from-red-50 to-white dark:from-red-950/30 dark:to-zinc-900">
+        <Card className="border border-white/5 shadow-xl bg-card/40 backdrop-blur-xl bg-gradient-to-br from-red-500/10 to-transparent hover:bg-red-500/20 transition-all duration-500 hover:-translate-y-1 hover:shadow-red-500/20">
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Blocked</p>
-            <p className="text-3xl font-bold text-red-600">{stats.blocked}</p>
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Blocked</p>
+            <p className="text-4xl font-black mt-2 text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-rose-600">{stats.blocked}</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-md bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/30 dark:to-zinc-900">
+        <Card className="border border-white/5 shadow-xl bg-card/40 backdrop-blur-xl bg-gradient-to-br from-amber-500/10 to-transparent hover:bg-amber-500/20 transition-all duration-500 hover:-translate-y-1 hover:shadow-amber-500/20">
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">OTP Triggered</p>
-            <p className="text-3xl font-bold text-amber-600">{stats.otp_triggered}</p>
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">OTP Triggered</p>
+            <p className="text-4xl font-black mt-2 text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">{stats.otp_triggered}</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-md bg-gradient-to-br from-blue-50 to-white dark:from-blue-950/30 dark:to-zinc-900">
+        <Card className="border border-white/5 shadow-xl bg-card/40 backdrop-blur-xl bg-gradient-to-br from-blue-500/10 to-transparent hover:bg-blue-500/20 transition-all duration-500 hover:-translate-y-1 hover:shadow-blue-500/20">
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Avg Risk Score</p>
-            <p className="text-3xl font-bold text-blue-600">{stats.avg_risk_score.toFixed(1)}<span className="text-lg text-muted-foreground">/100</span></p>
+            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Avg Risk Score</p>
+            <p className="text-4xl font-black mt-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">{stats.avg_risk_score.toFixed(1)}<span className="text-lg text-muted-foreground font-semibold">/100</span></p>
           </CardContent>
         </Card>
       </div>
@@ -108,8 +110,8 @@ export default function DashboardPage() {
         </Card>
 
         {/* API Usage */}
-        <Card className="shadow-md lg:col-span-2">
-          <CardHeader><CardTitle className="text-lg">API Usage</CardTitle></CardHeader>
+        <Card className="shadow-2xl border-white/5 bg-card/60 backdrop-blur-xl lg:col-span-2">
+          <CardHeader><CardTitle className="text-lg tracking-tight">API Usage</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div>
@@ -156,14 +158,17 @@ export default function DashboardPage() {
               <p className="text-center text-muted-foreground py-8">No evaluations yet. Make your first API call!</p>
             )}
             {stats.recent_evaluations.map((ev, i) => (
-              <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition">
-                <div className="flex items-center gap-3">
-                  <Badge className={`${DECISION_BG[ev.decision] || ''} text-xs font-bold px-2 py-0.5`}>
+              <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-card/40 border border-white/5 hover:bg-muted/30 hover:scale-[1.01] hover:shadow-lg transition-all duration-300 backdrop-blur-sm">
+                <div className="flex items-center gap-4">
+                  <Badge className={`${DECISION_BG[ev.decision] || ''} text-xs font-bold px-3 py-1 shadow-inner`}>
                     {ev.decision}
                   </Badge>
                   <div>
                     <p className="font-medium text-sm">{ev.user_id}</p>
                     <p className="text-xs text-muted-foreground">{ev.country} · {ev.ip}</p>
+                    <div className="text-[10px] mt-1 italic text-muted-foreground/80 prose prose-invert max-w-xs">
+                      <ReactMarkdown>{ev.explanation?.replace(/```markdown|```/g, '')}</ReactMarkdown>
+                    </div>
                   </div>
                 </div>
                 <div className="text-right">

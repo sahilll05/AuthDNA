@@ -15,49 +15,62 @@ class DNAEngine:
     @staticmethod
     def compute_match_score(profile: Optional[Dict], features: Dict, metadata: Dict) -> Dict:
         """
-        Compare current login against DNA profile.
-        Returns match score 0-100 (100 = perfect match), wrapped in a dictionary for consumers.
+        Compare current login against DNA profile using weighted dimensions.
+        Weights: Device (40%), Location (30%), Temporal (20%), Resource (10%)
         """
         if profile is None:
-            return {"dna_match": 50.0, "is_new_user": True, "deductions": []}
+            return {"dna_match": 50.0, "is_new_user": True, "deductions": [], "confidence": 0.1}
 
-        score = 100.0
-        deductions = []
+        # Calculate Confidence (0.1 -> 1.0) based on age and login count
+        count = int(profile.get("login_count", 0))
+        days = int(profile.get("days_active", 0))
+        confidence = min(1.0, 0.1 + (count / 100.0) * 0.5 + (days / 180.0) * 0.4)
 
-        if features.get("new_device", 0) == 1:
-            score -= 20
-            deductions.append({"reason": "new_device", "points": 20})
-
+        # Dimension Scores (0.0 to 1.0)
+        # 1. Device (40%)
+        device_score = 1.0 if features.get("new_device", 0) == 0 else 0.0
+        
+        # 2. Location (30%)
+        location_score = 1.0
         if features.get("country_change", 0) == 1:
-            score -= 25
-            deductions.append({"reason": "country_change", "points": 25})
+            location_score = 0.0
+        elif metadata.get("ip_change", False):
+            location_score = 0.8 # New IP same country
+            
+        # 3. Temporal (20%)
+        # Features.hour_deviation is normalized 0-1 (1 is max deviation)
+        temporal_score = 1.0 - features.get("hour_deviation", 0.0)
+        
+        # 4. Resource (10%)
+        resource_score = 1.0
+        unusual_res = features.get("unusual_resource", False)
+        if unusual_res:
+            resource_score = 0.2
 
-        if features.get("impossible_travel", 0) == 1:
-            score -= 30
-            deductions.append({"reason": "impossible_travel", "points": 30})
+        # Weighted Average
+        final_score = (
+            (device_score * 0.4) + 
+            (location_score * 0.3) + 
+            (temporal_score * 0.2) + 
+            (resource_score * 0.1)
+        ) * 100.0
 
-        hour_dev = features.get("hour_deviation", 0)
-        hour_penalty = hour_dev * 15
-        score -= hour_penalty
-        if hour_penalty > 2:
-            deductions.append({"reason": "unusual_hour", "points": round(hour_penalty, 1)})
-
-        ip_change = metadata.get("ip_change", False)
-        country_change_flag = features.get("country_change", 0)
-        if ip_change and not country_change_flag:
-            score -= 8
-            deductions.append({"reason": "new_ip_same_country", "points": 8})
-
+        # Penalize for severe anomalies like failed attempts
         failed = features.get("failed_attempts", 0)
-        fail_penalty = min(failed * 10, 30)
-        score -= fail_penalty
-        if fail_penalty > 0:
-            deductions.append({"reason": "failed_attempts", "points": fail_penalty})
+        final_score -= min(failed * 8, 40)
+
+        # Drill-down deductions for UI
+        deductions = []
+        if device_score < 1: deductions.append({"reason": "new_device", "points": 40})
+        if location_score < 1: deductions.append({"reason": "location_mismatch", "points": round((1-location_score)*30, 1)})
+        if temporal_score < 0.8: deductions.append({"reason": "unusual_hour", "points": round((1-temporal_score)*20, 1)})
+        if resource_score < 1: deductions.append({"reason": "unusual_resource", "points": 10})
 
         return {
-            "dna_match": max(0.0, min(100.0, score)),
+            "dna_match": max(0.0, min(100.0, final_score)),
             "is_new_user": False,
-            "deductions": deductions
+            "deductions": deductions,
+            "confidence": round(confidence, 2)
         }
 
     @staticmethod
@@ -74,7 +87,6 @@ class DNAEngine:
                 "known_devices_json": json.dumps([metadata.get("device_fp", "")]),
                 "known_countries_json": json.dumps([metadata.get("country", "Unknown")]),
                 "known_cities_json": json.dumps([metadata.get("city", "Unknown")]),
-                "known_ips_json": json.dumps([metadata.get("ip", "")]),
                 "avg_login_hour": float(metadata.get("hour", 12)),
                 "login_hours_json": json.dumps([metadata.get("hour", 12)]),
                 "hour_min": -1.0,
@@ -105,12 +117,6 @@ class DNAEngine:
             if country and country not in countries:
                 countries.append(country)
             profile["known_countries_json"] = json.dumps(countries)
-
-            known_ips = json.loads(profile.get("known_ips_json", "[]"))
-            current_ip = metadata.get("ip", "")
-            if current_ip and current_ip not in known_ips:
-                known_ips.append(current_ip)
-            profile["known_ips_json"] = json.dumps(known_ips[-10:])
 
             cities = json.loads(profile.get("known_cities_json", "[]"))
             city = metadata.get("city", "Unknown")

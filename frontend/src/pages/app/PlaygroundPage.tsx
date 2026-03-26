@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import evaluateAPI, { type EvaluateResponse } from '@/api/evaluate';
+import ReactMarkdown from 'react-markdown';
+
 
 const PRESETS: Record<string, any> = {
   normal: { user_id: 'alice@demo.com', ip: '49.36.128.100', device_fp: 'chrome-win-1920x1080', resource: 'general', failed_attempts: 0, role: 'viewer' },
@@ -134,8 +136,8 @@ export default function PlaygroundPage() {
                 </div>
 
                 {/* Explanation */}
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-sm italic">{response.explanation}</p>
+                <div className="bg-muted/50 rounded-lg p-3 prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown>{response.explanation?.replace(/```markdown|```/g, '')}</ReactMarkdown>
                 </div>
 
                 {/* DNA + Timing */}

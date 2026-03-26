@@ -23,21 +23,26 @@ class LLMExplainer:
         if c:
             try:
                 ft = "; ".join(f"{f['factor']}(+{f['contribution']})" for f in risk_factors[:5])
-                prompt = (f"Security analyst: ONE sentence, max 30 words. Score:{score}/100 Decision:{decision} "
-                          f"Country:{country} Hour:{hour} DNA:{dna_match}% New:{is_new_user} Factors:{ft}")
+                prompt = (f"Security analyst: Provide a concise, professional risk summary using Markdown (bolding, lists). "
+                          f"START IMMEDIATELY with the facts. NO preamble. NO conversational filler. "
+                          f"DO NOT wrap the output in code blocks or triple backticks. Just raw markdown text. "
+                          f"Score:{score}/100 Decision:{decision} Country:{country} Hour:{hour} DNA:{dna_match}% New:{is_new_user} Factors:{ft}")
                 def call():
-                    return c.chat.complete(model="mistral-tiny", messages=[{"role": "user", "content": prompt}],
-                                           max_tokens=60, temperature=0.3).choices[0].message.content.strip()
-                return await asyncio.wait_for(asyncio.to_thread(call), timeout=5.0)
+                    return c.chat.complete(model="mistral-tiny", messages=[{"role": "system", "content": "You are a professional security analyst. provide raw markdown analysis only. NEVER use code blocks or backticks in your response."}, {"role": "user", "content": prompt}],
+                                           max_tokens=150, temperature=0.1).choices[0].message.content.strip()
+                content = await asyncio.wait_for(asyncio.to_thread(call), timeout=8.0)
+                # Safety: strip code blocks if the LLM ignores instructions
+                return content.replace("```markdown", "").replace("```", "").strip()
             except Exception as e:
                 logger.warning(f"LLM failed: {e}")
         level = "Low" if score < 30 else "Medium" if score < 60 else "High"
         parts = [f"{level}-risk login"]
         names = [f["factor"] for f in risk_factors]
         if is_new_user: parts.append("first-time user")
-        if "new_device" in names: parts.append("unknown device")
-        if "new_country" in names: parts.append(f"from {country}")
+        if "is_new_device" in names: parts.append("unknown device")
+        if "country_change" in names: parts.append(f"from {country}")
         if "impossible_travel" in names: parts.append("impossible travel")
-        if "off_hours" in names: parts.append(f"at {hour}:00")
-        if dna_match > 80: parts.append(f"DNA {dna_match}%")
+        if "hour_zscore" in names: parts.append(f"unusual hour {hour}:00")
+        if "privilege_gap_score" in names: parts.append(f"high privilege gap")
+        if dna_match > 80: parts.append(f"DNA mismatched ({dna_match}% match)")
         return ": ".join([parts[0], ", ".join(parts[1:]) or "no anomalies"]) + "."

@@ -1,0 +1,139 @@
+
+
+
+
+
+1. Executive Summary
+Modern Identity and Access Management (IAM) systems rely on static, rule-based policies that cannot adapt to evolving threats. They fail in two critical ways: they block legitimate users too often (false positives), and they allow attackers with stolen credentials to pass through undetected (false negatives).
+
+This project builds an AI-powered identity risk engine that learns each user's unique behavioral patterns — their login rhythm, device loyalty, location consistency, and resource access habits — and encodes it into a Behavioral DNA Fingerprint. Every login attempt is scored against this fingerprint in real time. If the behavior does not match the identity, access is challenged or blocked, even when the password is correct.
+
+
+2. Problem Statement
+2.1 What Static IAM Systems Do
+Today's IAM systems operate on hardcoded conditionals:
+
+These rules are deterministic, static, and context-blind. They evaluate each login event in complete isolation.
+2.2 Why This Fails
+
+3. Solution Overview
+3.1 System Philosophy
+The system shifts the access control question from:
+
+
+
+This distinction is what makes the system capable of detecting credential theft, session hijacking, and insider threats that all static systems miss.
+3.2 High-Level Architecture
+
+
+
+4. Unique Feature — Behavioral DNA Fingerprinting
+
+4.1 What Behavioral DNA Is
+A Behavioral DNA Fingerprint is a fixed-length vector that encodes a user's typical patterns across six behavioral dimensions simultaneously. It is computed from the user's verified historical sessions and updated on a rolling basis.
+
+
+4.2 DNA Match Scoring
+Every new login generates a live behavioral snapshot and computes similarity against the stored DNA across all six dimensions. The result is a DNA Match Score (0–1). A low match score directly increases the risk score, even when the password is correct.
+
+4.3 DNA Drift Detection — The Truly Novel Part
+Behavioral DNA is not static. It evolves as users' lives change. The system distinguishes between natural evolution and suspicious takeover by measuring drift velocity — how fast the DNA is changing — and how many dimensions change simultaneously.
+
+
+Key insight: Natural life changes affect one behavioral dimension at a time. An account takeover changes everything simultaneously because the attacker is a completely different person.
+4.4 DNA Confidence Score
+DNA is not equally reliable for all users. The system tracks confidence based on data volume and consistency. New users get lenient DNA matching. Established users with 90+ days of history get strict matching. The system tells you how much to trust its own DNA assessments.
+
+
+
+
+5. Feature Engineering
+Feature engineering is the most important stage. The model is only as good as the signals you feed it. Use exactly these ten features — nothing more for a hackathon build.
+
+
+
+6. ML Pipeline
+6.1 Model Architecture
+Two models run in sequence. The outputs are combined with the DNA match score into a single risk score.
+
+
+6.2 Risk Score Formula
+Use this exact formula. Decide your weights before writing any code — changing them mid-build causes confusion.
+
+
+6.3 Labeling Strategy for XGBoost
+Since you are using synthetic data, label it programmatically during generation. This is acceptable for a prototype. Be ready to explain this honestly if judges ask.
+
+
+6.4 Adaptive Access Decision Table
+
+
+
+7. Privilege Graph Analyzer
+Traditional systems only analyze how a user logs in. This layer adds context about what they are trying to access and whether that access is appropriate for their role.
+
+7.1 Graph Structure
+
+7.2 Privilege Gap Score Formula
+When a user accesses a resource, compute the privilege gap — the mismatch between their role's typical access level and the resource's sensitivity.
+
+
+Keep the graph simple for the hackathon: 4–5 roles, 8–10 resources. The concept is more important than the complexity.
+
+8. LLM Explanation Layer
+This is the second major differentiator. Instead of showing raw numbers, the system generates natural language explanations for every access decision. Security teams do not trust black boxes — this layer builds trust.
+
+8.1 Where LLM Fits (and Where It Does Not)
+
+8.2 Explanation Prompt Template
+
+8.3 Example Output
+
+
+
+9. FastAPI Backend
+9.1 Critical: Model Loading Pattern
+Load all models once at startup. Never load inside a request handler. This is the most common performance mistake in ML API projects.
+
+
+9.2 Core Endpoint
+
+10. Security Dashboard
+The dashboard is what judges actually see. A functional, clean dashboard beats a beautiful broken one. Prioritize these four panels in this order.
+
+
+
+
+
+11. Build Schedule — 1 to 2 Week Sprint
+
+
+12. Demo Strategy
+12.1 The 60-Second Winning Sequence
+Every element of the system should support this exact demo flow. Build everything in service of making this sequence work flawlessly.
+
+
+12.2 The One Line That Wins the Room
+
+
+
+13. Known Difficulties & How to Handle Them
+
+14. Technology Stack
+
+15. Scope Cuts for Hackathon Build
+
+
+16. Key References
+Read these before writing code — in this order.
+
+BeyondCorp: A New Approach to Enterprise Security — Google 2014 (conceptual foundation for your entire system)
+IEEE-CIS Fraud Detection — top Kaggle solution notebooks (feature engineering patterns directly applicable)
+PyOD documentation — yzhao062/pyod on GitHub (use instead of raw sklearn for anomaly detection)
+SHAP tabular data notebooks — slundberg/shap on GitHub (implement explainability correctly)
+BloodHound — BloodHoundAD/BloodHound on GitHub (privilege graph modeling reference)
+NIST SP 800-207 Zero Trust Architecture (cite in documentation for credibility)
+CERT Insider Threat Dataset — Carnegie Mellon SEI (study their feature engineering approach)
+
+
+AI-Driven Identity Risk Scoring — PRD v1.0  |  Prepared for Hackathon Build

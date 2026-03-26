@@ -12,7 +12,7 @@ app.use(express.static(path.join(__dirname)));
 
 // Proxy the evaluate call server-side to avoid exposing the API key in the browser
 app.post('/api/login', async (req, res) => {
-  const { username, password, deviceContext } = req.body;
+  const { username, password, deviceContext, simulatedIp, simulatedFails, simulatedRole, simulatedResource } = req.body;
 
   const apiKey = process.env.AUTHDNA_API_KEY || '';
   const authdnaUrl = process.env.AUTHDNA_URL || 'http://localhost:8000';
@@ -21,18 +21,23 @@ app.post('/api/login', async (req, res) => {
     return res.status(500).json({ error: 'AUTHDNA_API_KEY not configured. See README.' });
   }
 
+  // Determine IP
+  const realIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const clientIp = simulatedIp || realIp;
+
   // Build the evaluate payload
   const payload = {
     user_id: username,
-    resource: 'dashboard',
-    failed_attempts: 0,
-    role: 'viewer',
+    resource: simulatedResource || 'dashboard',
+    failed_attempts: simulatedFails || 0,
+    role: simulatedRole || 'viewer',
     client_context: deviceContext || null,
+    ip: clientIp
   };
 
   try {
-    const { default: fetch } = await import('node-fetch');
-    const evalResp = await fetch(`${authdnaUrl}/v1/evaluate`, {
+    const fetch_provider = (typeof fetch !== 'undefined') ? fetch : require('node-fetch');
+    const evalResp = await fetch_provider(`${authdnaUrl}/v1/evaluate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -64,7 +69,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   const key = process.env.AUTHDNA_API_KEY || '';
   console.log(`\n🏢 Demo Company Site running at http://localhost:${PORT}`);

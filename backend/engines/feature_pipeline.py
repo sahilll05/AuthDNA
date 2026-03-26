@@ -14,10 +14,9 @@ RESOURCE_SENSITIVITY = {
     "dashboard": 0.3, "profile": 0.2, "general": 0.1,
 }
 FEATURE_NAMES = [
-    "hour_sin", "hour_cos", "hour_deviation", "is_weekend", "is_offhours",
-    "new_device", "country_change", "impossible_travel", "failed_norm",
-    "resource_sensitivity", "privilege_gap", "login_velocity",
-    "multi_attack_flag", "hour_x_newdev", "fail_x_newdev",
+    "hour_sin", "hour_cos", "hour_zscore", "is_new_device", "country_change", 
+    "impossible_travel", "failed_attempts", "resource_sensitivity", 
+    "days_since_last_login", "privilege_gap_score"
 ]
 ROLE_CLEARANCE = {"viewer": 1, "analyst": 2, "developer": 3, "hr": 3, "manager": 4, "admin": 5}
 SENS_MAP = {"dashboard": 1, "reports": 2, "profile": 1, "settings": 3, "billing": 3,
@@ -34,10 +33,11 @@ class FeaturePipeline:
                 d = r.json()
                 if d.get("status") == "success":
                     return {"country": d.get("country", "Unknown"), "city": d.get("city", "Unknown"),
-                            "isp": d.get("isp", "Unknown"), "lat": d.get("lat", 0.0), "lon": d.get("lon", 0.0)}
+                            "isp": d.get("isp", "Unknown"), "lat": d.get("lat", 0.0), "lon": d.get("lon", 0.0),
+                            "timezone": d.get("timezone", "UTC")}
         except Exception as e:
             logger.warning(f"IP lookup failed: {e}")
-        return {"country": "Unknown", "city": "Unknown", "isp": "Unknown", "lat": 0.0, "lon": 0.0}
+        return {"country": "Unknown", "city": "Unknown", "isp": "Unknown", "lat": 0.0, "lon": 0.0, "timezone": "UTC"}
 
     async def extract(self, user_id, ip, device_fp, resource, failed_attempts, user_agent, timestamp, dna_profile, role="viewer"):
         if timestamp:
@@ -48,8 +48,16 @@ class FeaturePipeline:
         else:
             dt = datetime.now(timezone.utc)
 
-        hour = dt.hour
         geo = await self.lookup_ip(ip)
+
+        # Bug Fix: Time varies country to country. Calculate LOCAL hour using IP timezone.
+        try:
+            import zoneinfo
+            tz_str = geo.get("timezone", "UTC")
+            dt_local = dt.astimezone(zoneinfo.ZoneInfo(tz_str))
+            hour = dt_local.hour
+        except Exception:
+            hour = dt.hour
         hour_sin = math.sin(2 * math.pi * hour / 24)
         hour_cos = math.cos(2 * math.pi * hour / 24)
         is_weekend = 1.0 if dt.weekday() >= 5 else 0.0
@@ -85,23 +93,43 @@ class FeaturePipeline:
         attack_signals = sum([new_device, country_change, impossible_travel,
                               1.0 if failed_attempts >= 3 else 0.0, is_offhours])
         multi_attack_flag = 1.0 if attack_signals >= 3 else 0.0
+        
+        unusual_resource = False
+        if dna_profile:
+            cr = json.loads(dna_profile.get("common_resources_json", "[]"))
+            if cr and resource not in cr:
+                unusual_resource = True
+
         hour_x_newdev = hour_deviation * new_device
         fail_x_newdev = failed_norm * new_device
 
+        hour_zscore = hour_deviation  # Alias for PRD
+        is_new_device = new_device
+        # For days_since_last_login, approximate using days_active or last_login
+        days_since_last_login = 1.0
+        if dna_profile:
+            last_ts_str = dna_profile.get("last_login")
+            if last_ts_str:
+                try:
+                    lts = datetime.fromisoformat(last_ts_str.replace("Z", "+00:00"))
+                    days_since_last_login = max(0.0, (dt - lts).total_seconds() / 86400.0)
+                except:
+                    pass
+        days_since_last_login = min(days_since_last_login, 90.0)
+        privilege_gap_score = privilege_gap
+
         fd = {
             "hour_sin": round(hour_sin, 6), "hour_cos": round(hour_cos, 6),
-            "hour_deviation": round(hour_deviation, 4), "is_weekend": is_weekend,
-            "is_offhours": is_offhours, "new_device": new_device,
-            "country_change": country_change, "impossible_travel": impossible_travel,
-            "failed_norm": round(failed_norm, 4), "resource_sensitivity": res_sensitivity,
-            "privilege_gap": round(privilege_gap, 4), "login_velocity": round(login_velocity, 4),
-            "multi_attack_flag": multi_attack_flag, "hour_x_newdev": round(hour_x_newdev, 4),
-            "fail_x_newdev": round(fail_x_newdev, 4),
+            "hour_zscore": round(hour_zscore, 4), "is_new_device": int(is_new_device),
+            "country_change": int(country_change), "impossible_travel": int(impossible_travel),
+            "failed_attempts": int(min(failed_attempts, 15)), "resource_sensitivity": int(res_sensitivity * 10),
+            "days_since_last_login": int(days_since_last_login), "privilege_gap_score": round(privilege_gap_score, 4),
         }
         features = np.array([fd[f] for f in FEATURE_NAMES], dtype=np.float64)
         return {
             "features": features, "feature_dict": fd, "geo": geo, "parsed_hour": hour,
             "flags": {"new_device": bool(new_device), "country_change": bool(country_change),
                       "impossible_travel": bool(impossible_travel), "is_offhours": bool(is_offhours),
-                      "is_weekend": bool(is_weekend), "multi_attack_flag": bool(multi_attack_flag)},
+                      "is_weekend": bool(is_weekend), "multi_attack_flag": bool(multi_attack_flag),
+                      "unusual_resource": unusual_resource},
         }

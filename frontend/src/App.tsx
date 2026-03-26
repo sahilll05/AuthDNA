@@ -31,58 +31,64 @@ import WebhooksPage from "@/pages/app/WebhooksPage";
 import UsagePage from "@/pages/app/UsagePage";
 import SettingsPage from "@/pages/app/SettingsPage";
 import PlaygroundPage from "@/pages/app/PlaygroundPage";
+import AdminSecurityDashboard from "@/pages/app/AdminSecurityDashboard";
+
+import { RealtimeLogsProvider } from "@/context/RealtimeLogsContext";
 
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          {/* ══════════════════════════════════════════════
-              PUBLIC ROUTES — with YOUR Navbar + Footer
-              ══════════════════════════════════════════════ */}
-          <Route element={<PublicLayout />}>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/features" element={<FeaturesPage />} />
-            <Route path="/pricing" element={<PricingPage />} />
-            <Route path="/docs" element={<DocsPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/contact" element={<ContactPage />} />
-            <Route path="/status" element={<StatusPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-          </Route>
+      <RealtimeLogsProvider>
+        <Router>
+          <Routes>
+            {/* ══════════════════════════════════════════════
+                PUBLIC ROUTES — with YOUR Navbar + Footer
+                ══════════════════════════════════════════════ */}
+            <Route element={<PublicLayout />}>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/features" element={<FeaturesPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/docs" element={<DocsPage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              <Route path="/status" element={<StatusPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+            </Route>
 
-          {/* ══════════════════════════════════════════════
-              PROTECTED APP ROUTES — with Sidebar layout
-              ══════════════════════════════════════════════ */}
-          <Route
-            path="/app"
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/app/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="threats" element={<ThreatsPage />} />
-            <Route path="logs" element={<LogsPage />} />
-            <Route path="users" element={<UsersPage />} />
-            <Route path="users/:userId" element={<UserDetailPage />} />
-            <Route path="api-keys" element={<ApiKeysPage />} />
-            <Route path="webhooks" element={<WebhooksPage />} />
-            <Route path="usage" element={<UsagePage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="playground" element={<PlaygroundPage />} />
-          </Route>
+            {/* ══════════════════════════════════════════════
+                PROTECTED APP ROUTES — with Sidebar layout
+                ══════════════════════════════════════════════ */}
+            <Route
+              path="/app"
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/app/dashboard" replace />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="live-radar" element={<AdminSecurityDashboard />} />
+              <Route path="threats" element={<ThreatsPage />} />
+              <Route path="logs" element={<LogsPage />} />
+              <Route path="users" element={<UsersPage />} />
+              <Route path="users/:userId" element={<UserDetailPage />} />
+              <Route path="api-keys" element={<ApiKeysPage />} />
+              <Route path="webhooks" element={<WebhooksPage />} />
+              <Route path="usage" element={<UsagePage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="playground" element={<PlaygroundPage />} />
+            </Route>
 
-          {/* ══════════════════════════════════════════════
-              404
-              ══════════════════════════════════════════════ */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Router>
-      <Toaster richColors position="top-right" />
+            {/* ══════════════════════════════════════════════
+                404
+                ══════════════════════════════════════════════ */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Router>
+        <Toaster richColors position="top-right" />
+      </RealtimeLogsProvider>
     </AuthProvider>
   );
 }
