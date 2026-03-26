@@ -51,11 +51,11 @@ const CodePreview = () => {
   const lines = [
     { text: 'POST /v1/evaluate', color: 'text-primary' },
     { text: 'X-API-Key: sk_live_abc123', color: 'text-muted-foreground' },
-    { text: '{', color: 'text-foreground/70' },
-    { text: '  "user_id": "bob@acme.com",', color: 'text-foreground/70' },
-    { text: '  "ip": "203.0.113.42",', color: 'text-foreground/70' },
-    { text: '  "device_fp": "chrome-win-1920"', color: 'text-foreground/70' },
-    { text: '}', color: 'text-foreground/70' },
+    { text: '{', color: 'text-foreground' },
+    { text: '  "user_id": "bob@acme.com",', color: 'text-muted-foreground' },
+    { text: '  "ip": "203.0.113.42",', color: 'text-muted-foreground' },
+    { text: '  "device_fp": "chrome-win-1920"', color: 'text-muted-foreground' },
+    { text: '}', color: 'text-foreground' },
     { text: '', color: '' },
     { text: '→ {"decision":"ALLOW","score":8.4}', color: 'text-success' },
   ];

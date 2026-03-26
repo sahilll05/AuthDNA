@@ -84,7 +84,7 @@ export default function RegisterPage() {
                 id="companyName"
                 value={form.companyName}
                 onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-                placeholder="Acme Corp"
+                placeholder="company name"
                 required
               />
             </div>
@@ -162,7 +162,7 @@ export default function RegisterPage() {
       </Card>
 
       {/* API Key Reveal Dialog */}
-      <Dialog open={!!revealedKey} onOpenChange={() => {}}>
+      <Dialog open={!!revealedKey} onOpenChange={() => { }}>
         <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>🎉 Welcome to AuthDNA!</DialogTitle>
